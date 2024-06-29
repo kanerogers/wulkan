@@ -1,0 +1,45 @@
+# Ignore build output directory
+/build/
+
+# Ignore CMake cache and temporary files
+.cache
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Ignore compilation artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.lib
+
+# Ignore binaries
+*/a.out
+*.exe
+*.app
+*.iobj
+*.pdb
+*.ilk
+*.out
+*.suo
+
+# Editor and IDE specific files
+.vs/
+.vscode/
+*.user
+*.aps
+*.db
+*.opendb
+*.sdf
+*.cproject
+*.directory
+*.project
+*.settings/
+*.sublime-workspace
+*.idea/
+
+# Operating system generated files
+.DS_Store
+Thumbs.db
