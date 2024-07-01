@@ -1,4 +1,5 @@
 #include "vulkan/vulkan_core.h"
+#include "vulkan/vulkan_beta.h"
 #include <_types/_uint32_t.h>
 #include <exception>
 #include <sys/_types/_null.h>
@@ -24,6 +25,8 @@ class HelloTriangleApplication {
         GLFWwindow* window;
         VkInstance instance;
         VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+        VkDevice device = VK_NULL_HANDLE;
+        VkSurfaceKHR surface;
 
         void initWindow() {
             glfwInit();
@@ -42,6 +45,8 @@ class HelloTriangleApplication {
         void initVulkan() {
             createInstance();
             createPhysicalDevice();
+            createDevice();
+            createSurface();
         }
 
         void createInstance() {
@@ -68,11 +73,13 @@ class HelloTriangleApplication {
                 requiredExtensions.emplace_back(glfwExtensions[i]);
             }
 
+#ifdef __APPLE__
             requiredExtensions.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+            instanceCreateInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
 
             instanceCreateInfo.enabledExtensionCount = requiredExtensions.size();
             instanceCreateInfo.ppEnabledExtensionNames = requiredExtensions.data();
-            instanceCreateInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
             auto result = vkCreateInstance(&instanceCreateInfo, NULL, &instance);
             if (result != VK_SUCCESS) {
@@ -84,23 +91,78 @@ class HelloTriangleApplication {
             uint32_t deviceCount = 0;
 
             vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
-            std::cout << "Found " << deviceCount << " devices" << std::endl;
 
             std::vector<VkPhysicalDevice> devices(deviceCount);
             vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-            for (const auto& device: devices) {
+            std::string deviceName;
+
+            for (const auto &device: devices) {
                 VkPhysicalDeviceProperties deviceProperties;
                 vkGetPhysicalDeviceProperties(device, &deviceProperties);
 
-                std::string deviceName(deviceProperties.deviceName);
-                std::cout << "Device name: " << deviceName << std::endl;
+                deviceName = deviceProperties.deviceName;
+
+                if (deviceName.starts_with("Apple")) {
+                    physicalDevice = device;
+                    break;
+                }
+
+                if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+                    physicalDevice = device;
+                    break;
+                }
             }
 
-            std::cout << "Done!" << std::endl;
+            if (physicalDevice == VK_NULL_HANDLE) {
+                throw std::runtime_error("Unable to find valid device");
+            }
+
+            std::cout << "Using device: " << deviceName << std::endl;
+        }
+
+        void createDevice() {
+            const float priority = 1.0;
+
+            VkDeviceQueueCreateInfo createQueueInfo{};
+            createQueueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            createQueueInfo.queueCount = 1;
+            createQueueInfo.queueFamilyIndex = 0;
+            createQueueInfo.pQueuePriorities = &priority;
+
+            VkPhysicalDeviceFeatures deviceFeatures{};
+
+            std::vector<const char*> deviceExtensions = {
+                VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
+            };
+
+            VkDeviceCreateInfo createDeviceInfo{};
+            createDeviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+            createDeviceInfo.pQueueCreateInfos = &createQueueInfo;
+            createDeviceInfo.queueCreateInfoCount = 1;
+            createDeviceInfo.pEnabledFeatures = &deviceFeatures;
+            createDeviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
+            createDeviceInfo.enabledExtensionCount = deviceExtensions.size();
+
+            auto result = vkCreateDevice(physicalDevice, &createDeviceInfo, nullptr, &device);
+
+            if (result != VK_SUCCESS) {
+                throw std::runtime_error("Unable to create device");
+            }
+        }
+
+        void createSurface() {
+            auto result = glfwCreateWindowSurface(instance, window, nullptr, &surface);
+            if (result != VK_SUCCESS) {
+                throw std::runtime_error("Unable to create surface");
+            }
+
+
         }
 
         void cleanup() {
+            vkDestroySurfaceKHR(instance, surface, nullptr);
+            vkDestroyDevice(device, nullptr);
             vkDestroyInstance(instance, nullptr);
             glfwDestroyWindow(window);
             glfwTerminate();
